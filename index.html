@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ドットレーサー</title>
+<style>
+  :root{
+    --case:#e9edf2; --case-dark:#cdd4dd; --case-line:#aeb7c4;
+    --neon1:#27c2ff; --neon2:#1456ff; --ink:#0c1326;
+    --screen:#0a0f1d; --asphalt:#1b2233; --lane:#3a4763;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:radial-gradient(120% 90% at 50% 0%, #1a2340 0%, #0a0e1a 60%, #05070d 100%);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;
+    color:#fff; display:flex; align-items:center; justify-content:center;
+    min-height:100%; padding:14px; touch-action:manipulation; overflow:hidden;
+  }
+
+  /* おもちゃ機の本体 */
+  .toy{
+    width:min(94vw, 380px);
+    background:
+      linear-gradient(180deg,#f6f8fb,#dfe5ee 60%,#cdd4de);
+    border-radius:26px;
+    padding:14px 14px 18px;
+    box-shadow:0 18px 40px rgba(0,0,0,.55), inset 0 2px 0 #fff, inset 0 -6px 14px rgba(0,0,0,.12);
+    position:relative;
+  }
+  /* 上部の滑り止めドット */
+  .grip{
+    height:18px; margin:2px 6px 10px;
+    background-image:radial-gradient(var(--case-line) 1.4px, transparent 1.6px);
+    background-size:10px 9px; opacity:.55; border-radius:8px;
+  }
+  /* ホログラム風パネル */
+  .panel{
+    background:
+      linear-gradient(135deg,#1f7fff 0%,#0e3bd6 45%,#15a6e6 100%);
+    border-radius:16px; padding:14px; position:relative; overflow:hidden;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.18), inset 0 8px 24px rgba(0,0,0,.25);
+  }
+  .panel::before{
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:.35;
+    background:
+      repeating-linear-gradient(115deg, transparent 0 7px, rgba(255,255,255,.10) 7px 9px),
+      repeating-linear-gradient(60deg, transparent 0 11px, rgba(0,255,255,.08) 11px 13px);
+    mix-blend-mode:screen;
+  }
+  .brand{
+    position:absolute; top:9px; left:14px; font-weight:800; letter-spacing:2px;
+    font-size:11px; color:rgba(255,255,255,.85); text-shadow:0 1px 0 rgba(0,0,0,.25);
+  }
+
+  /* 画面ベゼル */
+  .bezel{
+    margin:22px auto 0; width:min(72vw,260px); max-width:260px;
+    background:linear-gradient(180deg,#f4f6fa,#d6dce6);
+    border-radius:12px; padding:10px;
+    box-shadow:0 6px 14px rgba(0,0,0,.3), inset 0 2px 0 #fff;
+    position:relative; z-index:1;
+  }
+  .screen-wrap{
+    border-radius:6px; overflow:hidden; background:var(--screen);
+    box-shadow:inset 0 0 0 2px #2a3550, inset 0 0 22px rgba(0,0,0,.7);
+    position:relative;
+  }
+  canvas#game{
+    display:block; width:100%; height:auto; image-rendering:pixelated;
+    image-rendering:crisp-edges; touch-action:none;
+  }
+  /* 画面の走査線 */
+  .screen-wrap::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+    opacity:.35; mix-blend-mode:multiply;
+  }
+
+  /* 左右のアイコン飾り */
+  .deco{ position:absolute; color:rgba(255,255,255,.9); font-size:20px; z-index:0;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
+
+  /* 操作部 */
+  .controls{ margin-top:14px; display:flex; gap:10px; align-items:stretch; }
+  .dpad{ display:flex; gap:10px; flex:1; }
+  .btn{
+    flex:1; border:none; cursor:pointer; user-select:none;
+    background:linear-gradient(180deg,#3a4150,#1a1f2a);
+    color:#eef3ff; border-radius:14px; padding:16px 0;
+    font-size:26px; font-weight:800; line-height:1;
+    box-shadow:0 4px 0 #0c0f16, inset 0 1px 0 rgba(255,255,255,.18);
+    transition:transform .04s, box-shadow .04s;
+  }
+  .btn:active{ transform:translateY(3px); box-shadow:0 1px 0 #0c0f16, inset 0 1px 0 rgba(255,255,255,.12); }
+  .btn.act{ transform:translateY(3px); box-shadow:0 1px 0 #0c0f16; }
+  .side{ display:flex; flex-direction:column; gap:8px; width:96px; }
+  .sbtn{
+    border:none; cursor:pointer; border-radius:10px; padding:10px 0; flex:1;
+    font-size:12px; font-weight:800; letter-spacing:.5px; color:#fff;
+    background:linear-gradient(180deg,#2b66ff,#143ad8);
+    box-shadow:0 3px 0 #0a1f6e, inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  .sbtn:active{ transform:translateY(2px); box-shadow:0 1px 0 #0a1f6e; }
+  .sbtn.sound.off{ background:linear-gradient(180deg,#5b6577,#3a4150); box-shadow:0 3px 0 #20242c; }
+
+  .label{ text-align:center; margin-top:8px; font-size:11px; letter-spacing:1px;
+    color:#5a6678; font-weight:800; }
+
+  /* 広告枠 */
+  #ad{ margin-top:14px; min-height:0; display:flex; justify-content:center; }
+
+  @media (max-width:360px){
+    .side{ width:84px; }
+    .btn{ font-size:22px; }
+  }
+</style>
+</head>
+<body>
+  <div class="toy">
+    <div class="grip"></div>
+    <div class="panel">
+      <div class="brand">DOT&nbsp;RACER</div>
+
+      <span class="deco" style="top:54px; left:14px;">🧰</span>
+      <span class="deco" style="top:96px; left:16px;">📷</span>
+      <span class="deco" style="top:140px; left:16px;">♪</span>
+      <span class="deco" style="top:54px; right:14px;">🎮</span>
+      <span class="deco" style="top:96px; right:14px;">🌐</span>
+      <span class="deco" style="top:140px; right:16px;">★</span>
+
+      <div class="bezel">
+        <div class="screen-wrap">
+          <canvas id="game" width="200" height="320"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="dpad">
+        <button class="btn" id="leftBtn" aria-label="左">◀</button>
+        <button class="btn" id="rightBtn" aria-label="右">▶</button>
+      </div>
+      <div class="side">
+        <button class="sbtn" id="startBtn">START</button>
+        <button class="sbtn sound" id="soundBtn">SOUND</button>
+      </div>
+    </div>
+    <div class="label">◀ ▶ でクルマを動かして よけよう</div>
+
+    <div id="ad"></div>
+  </div>
+
+<script>
+(function(){
+"use strict";
+
+/* ===== キャンバス ===== */
+const cv = document.getElementById("game");
+const ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+ctx.imageSmoothingEnabled = false;
+
+/* ===== 道路レイアウト ===== */
+const ROAD_X = 22, ROAD_W = 156;          // 道路の左端と幅
+const LANES = 3;
+const LANE_W = ROAD_W / LANES;
+const laneCenter = (i) => ROAD_X + LANE_W * (i + 0.5);
+
+/* ===== ドット絵（上から見たクルマ） =====
+   . 透明 / B 車体 / X 濃い車体 / G 窓 / L 屋根ハイライト
+   W タイヤ / H ヘッドライト / T テールランプ           */
+const CAR_SPRITE = [
+  "..HXXXXH..",
+  ".XBBBBBBX.",
+  "WBBBBBBBBW",
+  "WBGGGGGGBW",
+  ".BGGGGGGB.",
+  ".BBBBBBBB.",
+  ".XBLLLLBX.",
+  ".XBLLLLBX.",
+  ".BBBBBBBB.",
+  ".BGGGGGGB.",
+  "WBGGGGGGBW",
+  "WBBBBBBBBW",
+  ".XBTTTTBX.",
+  "..XXXXXX..",
+];
+const SPR_W = 10, SPR_H = 14;
+const PXS = 3;                              // 1ドットの大きさ
+const CAR_W = SPR_W * PXS, CAR_H = SPR_H * PXS;
+
+/* 車体色のバリエーション */
+const PALETTES = [
+  { B:"#ff3b3b", X:"#b21d1d", L:"#ff7a7a" }, // 赤（プレイヤー）
+  { B:"#ffd23b", X:"#c79100", L:"#fff08a" }, // 黄
+  { B:"#36d17a", X:"#1c8a4d", L:"#8af0b6" }, // 緑
+  { B:"#9b6bff", X:"#5e34c4", L:"#cdb0ff" }, // 紫
+  { B:"#ff9b3b", X:"#c46512", L:"#ffc587" }, // 橙
+  { B:"#46c8ff", X:"#1d83c4", L:"#a6e6ff" }, // 水色
+];
+const FIXED = { G:"#bfeaff", W:"#1a1f2b", H:"#fff6c8", T:"#ff5a4a" };
+
+/* スプライトを描く。flip=true で上下反転（対向車） */
+function drawCar(px, py, palIndex, flip){
+  const pal = PALETTES[palIndex];
+  for (let r = 0; r < SPR_H; r++){
+    const row = CAR_SPRITE[flip ? (SPR_H - 1 - r) : r];
+    for (let c = 0; c < SPR_W; c++){
+      let ch = row[c];
+      if (ch === ".") continue;
+      // 反転時はライト類も入れ替えると自然
+      if (flip){ if (ch==="H") ch="T"; else if (ch==="T") ch="H"; }
+      let col = pal[ch] || FIXED[ch];
+      if (!col) col = pal.B;
+      ctx.fillStyle = col;
+      ctx.fillRect(Math.round(px + c*PXS), Math.round(py + r*PXS), PXS, PXS);
+    }
+  }
+}
+
+/* ===== ゲーム状態 ===== */
+let state = "title";          // title / play / over
+let player = { x: laneCenter(1) - CAR_W/2 };
+let targetX = player.x;
+let enemies = [];
+let scroll = 0;               // 路面スクロール量
+let speed = 1.7;              // 路面・敵の速度
+let spawnTimer = 0;
+let score = 0;
+let distance = 0;
+let hi = loadHi();
+let crash = null;             // クラッシュ演出
+let blink = 0;
+
+function loadHi(){ try { return parseInt(localStorage.getItem("dotracer_hi")||"0",10)||0; } catch(e){ return 0; } }
+function saveHi(){ try { localStorage.setItem("dotracer_hi", String(hi)); } catch(e){} }
+
+function resetGame(){
+  state = "play";
+  player.x = laneCenter(1) - CAR_W/2;
+  targetX = player.x;
+  enemies = [];
+  scroll = 0; speed = 1.7; spawnTimer = 26;
+  score = 0; distance = 0; crash = null;
+  lastLane = -1;
+  startBgm();
+}
+
+/* ===== 敵スポーン ===== */
+let lastLane = -1;
+function spawnEnemy(){
+  // 直前と違うレーンを選び、避けられる隙間を確保
+  let lane;
+  do { lane = (Math.random()*LANES)|0; } while (lane === lastLane && LANES > 1 && Math.random() < 0.6);
+  lastLane = lane;
+  const pal = 1 + ((Math.random()*(PALETTES.length-1))|0); // プレイヤー以外
+  enemies.push({
+    x: laneCenter(lane) - CAR_W/2,
+    y: -CAR_H - (Math.random()*30),
+    pal,
+    scored: false
+  });
+}
+
+/* ===== 入力 ===== */
+let holdL = false, holdR = false;
+function bindHold(el, set){
+  const on = (e)=>{ e.preventDefault(); set(true); };
+  const off = (e)=>{ e.preventDefault(); set(false); };
+  el.addEventListener("touchstart", on, {passive:false});
+  el.addEventListener("touchend", off, {passive:false});
+  el.addEventListener("touchcancel", off, {passive:false});
+  el.addEventListener("mousedown", on);
+  el.addEventListener("mouseup", off);
+  el.addEventListener("mouseleave", off);
+}
+const leftBtn = document.getElementById("leftBtn");
+const rightBtn = document.getElementById("rightBtn");
+bindHold(leftBtn,  v=>{ holdL=v; leftBtn.classList.toggle("act",v); if(v&&state==="title") resetGame(); });
+bindHold(rightBtn, v=>{ holdR=v; rightBtn.classList.toggle("act",v); if(v&&state==="title") resetGame(); });
+
+document.addEventListener("keydown", e=>{
+  if (e.repeat) return;
+  if (e.key==="ArrowLeft"||e.key==="a"){ holdL=true; }
+  if (e.key==="ArrowRight"||e.key==="d"){ holdR=true; }
+  if (e.key===" "||e.key==="Enter"){ e.preventDefault(); onStart(); }
+});
+document.addEventListener("keyup", e=>{
+  if (e.key==="ArrowLeft"||e.key==="a") holdL=false;
+  if (e.key==="ArrowRight"||e.key==="d") holdR=false;
+});
+
+function onStart(){
+  if (state==="play") return;
+  resetGame();
+}
+document.getElementById("startBtn").addEventListener("click", onStart);
+
+/* ===== サウンド（WebAudio・遅延初期化） ===== */
+let actx = null, soundOn = true, bgmTimer = null, bgmStep = 0;
+function ensureCtx(){
+  if (!actx){ try { actx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
+  if (actx && actx.state === "suspended") actx.resume();
+  return actx;
+}
+function beep(freq, dur, type, vol){
+  if (!soundOn) return;
+  const a = ensureCtx(); if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type||"square"; o.frequency.value = freq;
+  g.gain.value = vol||0.06;
+  o.connect(g); g.connect(a.destination);
+  const t = a.currentTime;
+  o.start(t);
+  g.gain.setValueAtTime(g.gain.value, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + (dur||0.1));
+  o.stop(t + (dur||0.1));
+}
+const BGM = [262,330,392,330, 294,349,440,349, 262,330,392,523, 247,294,392,294];
+function startBgm(){
+  stopBgm();
+  if (!soundOn) return;
+  if (!ensureCtx()) return;
+  bgmStep = 0;
+  bgmTimer = setInterval(()=>{
+    if (state!=="play"){ return; }
+    const n = BGM[bgmStep % BGM.length];
+    beep(n, 0.12, "square", 0.035);
+    if (bgmStep % 2 === 0) beep(n/2, 0.14, "triangle", 0.04);
+    bgmStep++;
+  }, 160);
+}
+function stopBgm(){ if (bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; } }
+const soundBtn = document.getElementById("soundBtn");
+soundBtn.addEventListener("click", ()=>{
+  soundOn = !soundOn;
+  soundBtn.classList.toggle("off", !soundOn);
+  if (soundOn){ ensureCtx(); if (state==="play") startBgm(); }
+  else stopBgm();
+});
+
+/* ===== 更新 ===== */
+function update(){
+  blink++;
+  if (state === "play"){
+    // 自機移動
+    const sp = 3.0;
+    if (holdL) player.x -= sp;
+    if (holdR) player.x += sp;
+    const minX = ROAD_X + 2, maxX = ROAD_X + ROAD_W - CAR_W - 2;
+    if (player.x < minX) player.x = minX;
+    if (player.x > maxX) player.x = maxX;
+
+    // スピードアップ
+    distance += speed;
+    speed = 1.7 + Math.min(3.6, distance/2600);
+    scroll = (scroll + speed) % 16;
+
+    // スポーン
+    spawnTimer -= 1;
+    if (spawnTimer <= 0){
+      spawnEnemy();
+      const base = Math.max(16, 40 - (distance/120));
+      spawnTimer = base + (Math.random()*14);
+    }
+
+    // 敵更新＆当たり判定
+    const pTop = H - 18 - CAR_H, pBot = H - 18;
+    for (const e of enemies){
+      e.y += speed;
+      if (!e.scored && e.y > pBot){
+        e.scored = true; score += 10; beep(880, 0.05, "square", 0.04);
+      }
+      // 当たり判定（少し甘め）
+      const m = 4;
+      if (e.y + CAR_H - m > pTop && e.y + m < pBot &&
+          e.x + CAR_W - m > player.x && e.x + m < player.x + CAR_W){
+        doCrash(e);
+      }
+    }
+    enemies = enemies.filter(e => e.y < H + CAR_H);
+  }
+  else if (state === "over"){
+    if (crash){ crash.t++; if (crash.t < 12){ beep(120 - crash.t*6, 0.06, "sawtooth", 0.07); } }
+  }
+}
+
+function doCrash(e){
+  if (state !== "play") return;
+  state = "over";
+  stopBgm();
+  crash = { x: (player.x + e.x)/2 + CAR_W/2, y: (H-18-CAR_H/2 + e.y+CAR_H/2)/2, t:0 };
+  // 派手なクラッシュ音
+  beep(180,0.12,"sawtooth",0.08); beep(90,0.2,"square",0.08);
+  if (score > hi){ hi = score; saveHi(); }
+}
+
+/* ===== 描画 ===== */
+function drawRoad(){
+  // 草地
+  ctx.fillStyle = "#16402a";
+  ctx.fillRect(0,0,W,H);
+  // 路肩のドット模様（スクロール）
+  ctx.fillStyle = "#1f5c3b";
+  for (let y = (scroll|0)%12 - 12; y < H; y += 12){
+    ctx.fillRect(4, y, 6, 6);
+    ctx.fillRect(W-10, y+6, 6, 6);
+  }
+  // アスファルト
+  ctx.fillStyle = "#222a3c";
+  ctx.fillRect(ROAD_X, 0, ROAD_W, H);
+  // 路肩白線
+  ctx.fillStyle = "#dfe6f5";
+  ctx.fillRect(ROAD_X-3, 0, 3, H);
+  ctx.fillRect(ROAD_X+ROAD_W, 0, 3, H);
+  // 車線（破線・スクロール）
+  ctx.fillStyle = "#5a6c8f";
+  for (let l = 1; l < LANES; l++){
+    const lx = ROAD_X + LANE_W*l - 1.5;
+    for (let y = (scroll|0)-24; y < H; y += 24){
+      ctx.fillRect(lx, y, 3, 12);
+    }
+  }
+}
+
+function drawHud(){
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 11px monospace";
+  ctx.textAlign = "left";
+  ctx.fillText("SCORE " + score, 6, 14);
+  ctx.textAlign = "right";
+  ctx.fillText("HI " + hi, W-6, 14);
+  ctx.textAlign = "left";
+}
+
+function drawCenter(lines, sub){
+  ctx.fillStyle = "rgba(0,0,0,.55)";
+  ctx.fillRect(0, H/2-58, W, 116);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffe45e";
+  ctx.font = "bold 22px monospace";
+  ctx.fillText(lines[0], W/2, H/2-18);
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 12px monospace";
+  for (let i=1;i<lines.length;i++) ctx.fillText(lines[i], W/2, H/2 + 4 + (i-1)*16);
+  if (sub && blink % 40 < 24){
+    ctx.fillStyle = "#9fe7ff";
+    ctx.font = "bold 12px monospace";
+    ctx.fillText(sub, W/2, H/2 + 44);
+  }
+  ctx.textAlign = "left";
+}
+
+function render(){
+  drawRoad();
+
+  // 敵車（対向＝反転）
+  for (const e of enemies) drawCar(e.x, e.y, e.pal, true);
+
+  // 自機
+  if (state !== "over" || (crash && crash.t % 2 === 0)){
+    drawCar(player.x, H - 18 - CAR_H, 0, false);
+  }
+
+  // クラッシュ演出
+  if (state === "over" && crash){
+    const r = crash.t * 3;
+    ctx.strokeStyle = crash.t % 2 ? "#ffd23b" : "#ff5a4a";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(crash.x, crash.y, r, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = "#fff6c8";
+    for (let i=0;i<6;i++){
+      const a = i/6*Math.PI*2 + crash.t*0.3;
+      ctx.fillRect(crash.x + Math.cos(a)*r - 2, crash.y + Math.sin(a)*r - 2, 4, 4);
+    }
+  }
+
+  drawHud();
+
+  if (state === "title"){
+    drawCenter(["DOT RACER","◀ ▶ でよけろ！"], "PUSH START");
+  } else if (state === "over"){
+    drawCenter(["GAME OVER","SCORE "+score, (score>=hi?"NEW HI!":"HI "+hi)], "START でもう一度");
+  }
+}
+
+/* ===== ループ ===== */
+function loop(){
+  update();
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
+
+/* ===== 忍者AdMax（iframe 隔離） =====
+   ↓の AD_ID を自分の広告IDに差し替えてください。
+   空のままでも、ゲームは普通に動きます。            */
+const AD_ID = ""; // 例: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+function injectAd(){
+  if (!AD_ID) return;
+  const box = document.getElementById("ad");
+  const ifr = document.createElement("iframe");
+  ifr.style.cssText = "border:0;width:300px;height:250px;overflow:hidden;";
+  ifr.scrolling = "no";
+  box.appendChild(ifr);
+  const d = ifr.contentWindow.document;
+  d.open();
+  d.write(
+    '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
+    '<body style="margin:0">' +
+    '<script src="https://adm.shinobi.jp/s/' + AD_ID + '"><\/script>' +
+    '</body></html>'
+  );
+  d.close();
+}
+injectAd();
+
+})();
+</script>
+</body>
+</html>
